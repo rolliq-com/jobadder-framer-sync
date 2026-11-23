@@ -1,0 +1,4 @@
+# Local development only (wrangler dev). Copy to .dev.vars and fill in.
+FEED_BASIC_AUTH_USER=
+FEED_BASIC_AUTH_PASS=
+FEED_PATH_SECRET=

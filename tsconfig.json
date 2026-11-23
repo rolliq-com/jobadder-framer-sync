@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": true
+  },
+  // The pure script helpers only: the CLI entry points use Node APIs, and
+  // Node's type package is not a dependency.
+  "include": ["src", "test", "vitest.config.ts", "scripts/lib/config-edit.mjs", "scripts/lib/email.mjs", "scripts/lib/feed.mjs"]
+}

@@ -1,0 +1,73 @@
+// Deploy-time configuration. Every <ANGLE_BRACKET> value is a placeholder the
+// person deploying fills in for the site owner's own Cloudflare account. Secrets are
+// never set here: use `wrangler secret put <NAME>` (see docs/DEPLOY.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jobadder-feed-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+
+  // One entry point only: the HTTPS custom domain below. No workers.dev URL
+  // and no preview URLs.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "<FEED_HOSTNAME>", "custom_domain": true }],
+
+  "vars": {
+    // "capture" stores each push. "sync" also writes it to the site's Jobs
+    // collection; it needs the settings commented out at the end of this
+    // block and the FRAMER_API_KEY secret. Leave it on "capture" until you are
+    // ready to switch sync on (docs/DEPLOY.md, Sync mode).
+    "FEED_MODE": "capture",
+    // "basic" (HTTPS plus basic auth) or "path" (HTTPS plus an unguessable
+    // path, the fallback if basic auth does not work with the sender).
+    "FEED_AUTH_MODE": "basic",
+    // Basic mode only: the path the sender posts to.
+    "FEED_PATH": "/",
+    "MAX_BODY_BYTES": "5000000",
+    // "kv" (default) or "r2". CAPTURE_BINDING names the binding below.
+    "CAPTURE_STORE": "kv",
+    "CAPTURE_BINDING": "FEED_CAPTURE",
+    // The public jobs fallback, GET /jobs.json: "off" (default) or "on". To
+    // switch it on, also set SITE_ORIGIN to the site's https origin, e.g.
+    // "https://www.<SITE_DOMAIN>" (see docs/DEPLOY.md).
+    "JOBS_FALLBACK": "off",
+    // Sync mode only:
+    // The bare 20-character id after "--" in the project URL.
+    // "FRAMER_PROJECT_ID": "<FRAMER_PROJECT_ID>",
+    // "FRAMER_COLLECTION_NAME": "Jobs",
+    // "HIRING_ORG_NAME": "<HIRING_ORG_NAME>",
+    // "HIRING_ORG_URL": "https://www.<SITE_DOMAIN>/",
+    // "JOB_COUNTRY": "<COUNTRY_CODE>",
+    // Removals above this share of the collection are held, not applied...
+    // "MAX_REMOVAL_FRACTION": "0.5",
+    // ...but only when at least this many go: fewer are never held, so a
+    // small board's routine expiries go through. "1" holds on the share alone.
+    // "MASS_REMOVAL_MIN_ITEMS": "3",
+    // Lets one held push (its 12-character sha256 from the log) remove more,
+    // e.g. a large genuine removal (docs/DEPLOY.md, The launch push). Remove once it has run.
+    // "ALLOW_MASS_REMOVAL_SHA": "<12_HEX_CHARS>",
+  },
+
+  // Sync mode: every 30 minutes, re-run a sync that failed or was held. Does
+  // nothing in capture mode.
+  "triggers": { "crons": ["*/30 * * * *"] },
+
+  "kv_namespaces": [{ "binding": "FEED_CAPTURE", "id": "<KV_NAMESPACE_ID>" }],
+
+  // GET /status shows the Cloudflare version id and upload time from this
+  // binding, so a code deploy and a dashboard settings edit can be told apart.
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+
+  // To use R2 instead, set CAPTURE_STORE to "r2", remove kv_namespaces and
+  // uncomment this block.
+  // "r2_buckets": [{ "binding": "FEED_CAPTURE", "bucket_name": "<R2_BUCKET_NAME>" }],
+
+  // The Worker writes one allow-listed log line per request. Cloudflare's own
+  // invocation logs are off because they record the request URL, which in
+  // path mode contains the secret.
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": false }
+  }
+}

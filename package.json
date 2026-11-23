@@ -1,0 +1,32 @@
+{
+  "name": "jobadder-framer-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker that receives a JobAdder XML job feed pushed by HTTP POST.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "capture": "node scripts/capture.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "wrangler deploy --dry-run --outdir=dist",
+    "check": "npm run typecheck && npm test && npm run build",
+    "dev": "wrangler dev --local-protocol https"
+  },
+  "dependencies": {
+    "fast-xml-parser": "5.12.0",
+    "framer-api": "5.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.8",
+    "@cloudflare/workers-types": "5.20261023.1",
+    "@vitest/runner": "4.1.11",
+    "@vitest/snapshot": "4.1.11",
+    "typescript": "5.9.3",
+    "vitest": "4.1.12",
+    "wrangler": "4.153.0"
+  }
+}
