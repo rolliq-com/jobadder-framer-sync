@@ -61,7 +61,7 @@ jobs:
       - name: Gitleaks scan
         run: |
           docker run --rm -v "${{ github.workspace }}:/repo" \
-            ghcr.io/gitleaks/gitleaks:v8.18.4@sha256:75bdb2b2f4db213cde0b8295f13a88d6b333091bbfbf3012a4e083d00d31caba \
+            ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
             detect --source=/repo --redact --verbose --exit-code=1
 
   semgrep:
@@ -72,7 +72,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The image by digest, as for Gitleaks: a pip install would resolve
+      # semgrep's own dependencies afresh on every run, unpinned.
       - name: Semgrep
         run: |
-          pip install semgrep==1.163.0
-          semgrep scan --config p/security-audit --config p/typescript --error --metrics=off
+          docker run --rm -v "${{ github.workspace }}:/src" -w /src \
+            semgrep/semgrep:1.163.0@sha256:7cad2bc2d1e44f87f0bf4be6d1fa23aa90fb72015bebc89fb91385d813987a03 \
+            semgrep scan --config p/security-audit --config p/typescript --error --metrics=off
