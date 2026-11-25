@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { JOB_FIELDS, toItem } from "../src/fields";
 import { jobSlug, parseJobs, type Job } from "../src/jobs";
 import { employmentType, jobPosting, serializeJsonLd } from "../src/jsonld";
-import { sanitizeHtml } from "../src/sanitize";
+import { normalizeWhitespace, sanitizeHtml } from "../src/sanitize";
 import { FEED_XML, JOBS_XML, REAL_SHAPE_XML, REJECTS_XML } from "./fixtures";
 
 const bytes = (s: string) => new TextEncoder().encode(s);
@@ -228,6 +228,62 @@ describe("sanitizeHtml", () => {
 
   it("returns an empty string for an empty description", async () => {
     expect(await sanitizeHtml("  ")).toBe("");
+  });
+});
+
+// The site's rich text keeps whitespace and line breaks as written, so stray
+// ones in the feed show as extra spaces and blank lines. Synthetic text, with
+// the structure seen in live ads.
+describe("whitespace normalisation", () => {
+  it.each([
+    ["spaces and a line break before a list", "Lead in:&nbsp;&nbsp;&nbsp;<br/> <ul><li>Item one</li></ul>", "Lead in:<ul><li>Item one</li></ul>"],
+    ["plain spaces before a line break", "Line one.   <br>Line two.", "Line one.<br>Line two."],
+    ["a raw non-breaking space before a line break", "Line one. <br>Line two.", "Line one.<br>Line two."],
+    ["numeric non-breaking spaces", "Line one.&#160;&#xA0;<br>Line two.", "Line one.<br>Line two."],
+    ["a space between two line breaks", "Para one.<br> <br>Para two.", "Para one.<br><br>Para two."],
+    ["a run of line breaks", "Para one.<br><br><br><br>Para two.", "Para one.<br><br>Para two."],
+    ["a line break at the start and end of a paragraph", "<p><br>Text.<br></p>", "<p>Text.</p>"],
+    ["a line break after a list", "<ul><li>Item one</li></ul><br>After.", "<ul><li>Item one</li></ul>After."],
+    ["a line break before a heading", "Text.<br><h2>Heading</h2>", "Text.<h2>Heading</h2>"],
+    ["an empty paragraph", "<p>One.</p><p> &nbsp; </p><p>Two.</p>", "<p>One.</p><p>Two.</p>"],
+    ["a paragraph of only line breaks", "<p>One.</p><p><br><br></p><p>Two.</p>", "<p>One.</p><p>Two.</p>"],
+    ["whitespace at the edges of items", "<ul> <li> Item one </li>\n <li>Item two&nbsp;</li> </ul>", "<ul><li>Item one</li><li>Item two</li></ul>"],
+    ["whitespace inside a heading", "<h2> Heading </h2>", "<h2>Heading</h2>"],
+    ["space inside a bold label before a line break", "<strong>Label:&nbsp;</strong><br>Text.", "<strong>Label:</strong><br>Text."],
+    ["a line break inside bold before a list", "<strong>Label:<br></strong> <ul><li>Item</li></ul>", "<strong>Label:</strong><ul><li>Item</li></ul>"],
+    ["newlines and runs of spaces in text", "Word one\n\n   word two.", "Word one word two."],
+    ["a double space after a full stop", "One.&nbsp; Two. &nbsp;Three.  Four.", "One. Two. Three. Four."],
+    ["text after a list","<ul><li>Item</li></ul> Closing line.", "<ul><li>Item</li></ul>Closing line."],
+    ["whitespace around the whole body", " \n<p>Text.</p>\n ", "<p>Text.</p>"],
+  ])("removes %s", async (_name, input, expected) => {
+    const out = await sanitizeHtml(input);
+    expect(out).toBe(expected);
+    expect(await sanitizeHtml(out)).toBe(out);
+    expect(normalizeWhitespace(out)).toBe(out);
+  });
+
+  it.each([
+    ["a single line break in running text", "Line one.<br>Line two."],
+    ["a blank line between paragraphs of text", "Para one.<br><br>Para two."],
+    ["a non-breaking space between words", "<p>10&nbsp;km away</p>"],
+    ["two non-breaking spaces between words", "<p>Indent&nbsp;&nbsp;here</p>"],
+    ["spaces around inline markup", '<p>A <strong>bold</strong> word and <a href="https://www.example.com/" rel="nofollow noopener noreferrer">a link</a> here.</p>'],
+    ["a clean structured body", "<h2>Heading</h2><p>Intro.</p><ul><li>One</li><li>Two</li></ul><p>Outro <em>here</em>.</p>"],
+  ])("keeps %s byte-identical", async (_name, input) => {
+    expect(await sanitizeHtml(input)).toBe(input);
+  });
+
+  it("cleans the live feed's shape without changing its words", async () => {
+    const raw = parsed(REAL_SHAPE_XML)[0]!.description;
+    const out = await sanitizeHtml(raw);
+    expect(out).toBe("<strong>About us</strong><br>Invented text.<ul><li>One</li></ul>We&rsquo;re hiring.");
+    const words = (html: string) => html.replace(/<[^>]*>|&nbsp;/g, " ").split(/\s+/).filter(Boolean);
+    expect(words(out)).toEqual(words(raw));
+  });
+
+  it("gives an unchanged ad the same item on every sync", async () => {
+    const job = parsed(REAL_SHAPE_XML)[0]!;
+    expect(JSON.stringify(await toItem(job, OPTIONS))).toBe(JSON.stringify(await toItem(job, OPTIONS)));
   });
 });
 

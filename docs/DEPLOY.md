@@ -161,6 +161,12 @@ existing login (JobAdder needs no change) and deploys the new code. When it offe
 login, enter it from your password manager, or press Enter to skip. The old folder can then be
 deleted.
 
+**Coming from an earlier copy of this code** (a release numbered below v1.0.0, from another
+repository): update the same way. Get the latest release from this repository into a new folder and
+run `npm ci` and `npm run setup` with the same account and web address. The Worker keeps its name,
+storage, login and live settings. Afterwards, `npm run setup -- --check` shows the new release
+number.
+
 **Setup keeps the live Worker's settings.** Before deploying, setup reads the variables the live
 Worker has now (for example `FEED_MODE` and the sync settings from
 [sync mode](#sync-mode-switching-sync-on), whether set in a file or in the dashboard) and deploys them

@@ -51,7 +51,49 @@ export async function sanitizeHtml(html: string): Promise<string> {
       doctype() {},
     });
   const out = await rewriter.transform(new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } })).text();
-  return rebuildTags(out).trim();
+  return normalizeWhitespace(rebuildTags(out));
+}
+
+// Whitespace the old site collapsed but the new site's rich text renders:
+// it keeps spaces and line breaks as written, so "Lead in:   <br> <ul>"
+// shows trailing spaces and a blank line before the list. Runs on the
+// rebuilt output, where every tag is a bare allowed tag (or a link with
+// exactly the href and rel set above), so matching tags by pattern is safe.
+// Only whitespace and line breaks are removed; the words are unchanged.
+
+// An ordinary space, a tab or newline, or a non-breaking space in any spelling.
+const SPACE = String.raw`(?:[ \t\r\n\f ]|&nbsp;|&#160;|&#[xX]0*[aA]0;)`;
+const BLOCK = String.raw`(?:</?(?:p|ul|ol|li|h2|h3|h4|blockquote)>)`;
+const INLINE_OPEN = String.raw`(?:<(?:strong|b|em|i|u)>|<a [^<>]*>)`;
+const INLINE_CLOSE = String.raw`(?:</(?:strong|b|em|i|u|a)>)`;
+
+const RULES: [RegExp, string][] = [
+  // Space before a line break or a block edge, even with inline end tags between.
+  [new RegExp(`${SPACE}+((?:${INLINE_CLOSE})*)(<br>|${BLOCK}|$)`, "g"), "$1$2"],
+  // Space after a line break or a block edge, even with inline start tags between.
+  [new RegExp(`(^|<br>|${BLOCK})((?:${INLINE_OPEN})*)${SPACE}+`, "g"), "$1$2"],
+  // A line break against a block edge, or at the very start or end, adds an empty line.
+  [new RegExp(`(^|${BLOCK})((?:${INLINE_OPEN}|${INLINE_CLOSE})*)<br>`, "g"), "$1$2"],
+  [new RegExp(`<br>((?:${INLINE_OPEN}|${INLINE_CLOSE})*)(${BLOCK}|$)`, "g"), "$1$2"],
+  // More than two line breaks in a row: keep one blank line.
+  [/<br><br>(?:<br>)+/g, "<br><br>"],
+  // A paragraph left empty.
+  [/<p><\/p>/g, ""],
+];
+
+/** Removes whitespace and line breaks that would render as extra space. Idempotent. */
+export function normalizeWhitespace(html: string): string {
+  // Runs of ordinary whitespace in text read as one space, as on the old site.
+  // So does a run mixing non-breaking and ordinary spaces (a double space
+  // after a full stop); a non-breaking space on its own is kept.
+  let out = html
+    .replace(/[ \t\r\n\f]+/g, " ")
+    .replace(new RegExp(`${SPACE}{2,}`, "g"), (run) => (run.includes(" ") ? " " : run));
+  for (let previous = ""; previous !== out; ) {
+    previous = out;
+    for (const [pattern, replacement] of RULES) out = out.replace(pattern, replacement);
+  }
+  return out;
 }
 
 const LINK_ATTRIBUTES = /^ href="[^"<>]*" rel="nofollow noopener noreferrer"$/;
