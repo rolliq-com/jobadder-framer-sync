@@ -5,6 +5,7 @@ import { parseJobs } from "./jobs";
 import { recordSync } from "./health";
 import { logSync, type SyncLogFields } from "./log";
 import { readCapture, readStatus, writeStatus, type SyncStatus } from "./store";
+import { version } from "../package.json";
 
 // Sync mode: makes the site's Jobs collection match one stored feed payload.
 // The payload is the desired state: every job in it is upserted by ad id,
@@ -54,8 +55,8 @@ async function sync({ config, payload, sha256, connect }: RunOptions): Promise<O
   } catch {
     return { outcome: "error", reason: "store_failed" };
   }
-  const record = async (status: Omit<SyncStatus, "sha256" | "at">) => {
-    await writeStatus(store, { sha256, at: new Date().toISOString(), ...status });
+  const record = async (status: Omit<SyncStatus, "sha256" | "at" | "version">) => {
+    await writeStatus(store, { sha256, at: new Date().toISOString(), version, ...status });
   };
 
   // Refused payloads touch nothing on the site.
@@ -176,9 +177,11 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 /**
- * The cron's reconcile: re-runs the sync on the stored payload unless the
- * last run already finished on it. A Framer error or held removals are tried
- * again every time, so an outage heals and a hold keeps being reported.
+ * The cron's reconcile: re-runs the sync on the stored payload unless this
+ * release already finished on it. A Framer error or held removals are tried
+ * again every time, so an outage heals and a hold keeps being reported. A new
+ * release re-syncs once, so a change in how ads are written goes live without
+ * waiting for a push; the per-item hashes still mean only changed ads are written.
  */
 export async function reconcile(config: Config & { sync: SyncConfig }, connect: FramerConnector): Promise<SyncLogFields> {
   const started = Date.now();
@@ -200,7 +203,7 @@ export async function reconcile(config: Config & { sync: SyncConfig }, connect: 
   }
   if (!capture) return skip("no_capture");
   const sha256 = capture.sha256 && /^[0-9a-f]{64}$/.test(capture.sha256) ? capture.sha256 : await sha256Hex(capture.payload);
-  if (status?.sha256 === sha256 && (status.outcome === "ok" || status.outcome === "refused")) {
+  if (status?.sha256 === sha256 && status.version === version && (status.outcome === "ok" || status.outcome === "refused")) {
     return skip("up_to_date", sha256);
   }
   const result = await runSync({ config, payload: capture.payload, sha256, connect, trigger: "cron" });

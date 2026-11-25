@@ -194,13 +194,22 @@ describe("GET /status", () => {
     );
     await bindings.FEED_CAPTURE.put(
       LAST_SYNC_KEY,
-      JSON.stringify({ outcome: "ok", trigger: "cron", at: "2026-11-06T00:00:00.000Z", ms: 5, reason: "<script>", jobs: "6", title: "leak" }),
+      JSON.stringify({ outcome: "ok", trigger: "cron", at: "2026-11-06T00:00:00.000Z", ms: 5, reason: "<script>", jobs: "6", title: "leak", version: "1.0.2-leak" }),
     );
     const { body, text } = await status(testEnv());
     expect(text).not.toContain("leak");
     expect(text).not.toContain("<script>");
     expect(body.last_sync).toMatchObject({ outcome: "ok", trigger: "cron", ms: 5 });
     expect(body.last_sync?.jobs).toBeUndefined();
+    expect(body.last_sync?.version).toBeUndefined();
+  });
+
+  it("shows which release did the last sync", async () => {
+    await bindings.FEED_CAPTURE.put(
+      LAST_SYNC_KEY,
+      JSON.stringify({ outcome: "ok", trigger: "cron", at: "2026-11-06T00:00:00.000Z", ms: 5, version: "1.0.2" }),
+    );
+    expect((await status(testEnv())).body.last_sync).toMatchObject({ outcome: "ok", version: "1.0.2" });
   });
 
   it("treats a corrupt record as no record", async () => {

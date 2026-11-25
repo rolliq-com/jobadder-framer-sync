@@ -161,6 +161,11 @@ existing login (JobAdder needs no change) and deploys the new code. When it offe
 login, enter it from your password manager, or press Enter to skip. The old folder can then be
 deleted.
 
+In sync mode, no push is needed after an update: within 30 minutes the cron syncs the stored push
+once with the new release, so a change in how ads are written reaches the site. Only ads whose
+written content changed are rewritten, and the site is published only if something was. Then
+`last_sync` in [the status page](#status-page) shows the new release.
+
 **Coming from an earlier copy of this code** (a release numbered below v1.0.0, from another
 repository): update the same way. Get the latest release from this repository into a new folder and
 run `npm ci` and `npm run setup` with the same account and web address. The Worker keeps its name,
@@ -486,7 +491,7 @@ and no job text:
 | `mass_removal_override` | Whether `ALLOW_MASS_REMOVAL_SHA` is set (remove it once its push has synced) |
 | `records` | `ok`, or why `last_push` and `last_sync` could not be read (`unreadable`, `unset`); their nulls then mean nothing |
 | `last_push` | When the last accepted push arrived, and its 12-character hash |
-| `last_sync` | Sync mode: the last sync run's outcome, reason code, trigger, time, counts, whether it published, hash and duration |
+| `last_sync` | Sync mode: the last sync run's outcome, reason code, trigger, time, counts, whether it published, hash, duration and the release that ran it (`version`) |
 
 The answer is cached for up to 30 seconds per Cloudflare location, but a new deployment (code or
 settings) shows at once. A push or sync can therefore take up to about a minute to appear.
@@ -683,7 +688,7 @@ still stored and answered 200, and the cron retries every 30 minutes.
 | `internal` | Building the items or closing the Framer session failed | A code fault: see [Common failures](#common-failures) |
 | `store_failed` | KV or R2 read/write failed | Check the storage binding |
 | `misconfigured` | A setting is missing or invalid; the `setting` field names it | Fix that setting and redeploy |
-| `up_to_date`, `no_capture` (outcome `skipped`) | Cron found nothing to do | Nothing |
+| `up_to_date`, `no_capture` (outcome `skipped`) | Cron found nothing to do: this release already synced the stored push, or there is none | Nothing |
 
 **`framer_connect` on every run means an access problem, not a code fault.** The key no longer
 has edit access to the project. Framer answers such a key with "This project opened view-only",

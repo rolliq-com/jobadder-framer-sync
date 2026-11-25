@@ -306,7 +306,7 @@ export function formatStatus(status, body, localVersion) {
       `${shown(sync.ms)} ms`,
     ].filter(Boolean);
     const reason = sync.reason ? ` (${shown(sync.reason)})` : "";
-    lines.push(`Last sync:      ${shown(sync.outcome)}${reason} by ${shown(sync.trigger)} at ${shown(sync.at)}: ${counts.join(", ")}`);
+    lines.push(`Last sync:      ${shown(sync.outcome)}${reason} by ${shown(sync.trigger)}${sync.version ? ` (v${shown(sync.version)})` : ""} at ${shown(sync.at)}: ${counts.join(", ")}`);
     if (sync.outcome === "held") {
       lines.push(`  WARN  removals are held. If they are genuine, set ALLOW_MASS_REMOVAL_SHA to ${shown(sync.sha256)} (docs/DEPLOY.md, The launch push).`);
       if (verdict === "pass") verdict = "warn";

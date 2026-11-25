@@ -1,6 +1,7 @@
 import type { Config } from "./config";
 import type { SyncLogFields } from "./log";
 import { readText, writeText } from "./store";
+import { version } from "../package.json";
 
 // Two small records, kept beside the capture so GET /status can answer with two
 // small reads (never the payload, which can be megabytes, or the sync's item
@@ -31,6 +32,8 @@ export interface LastSync {
   held_removals?: number;
   published?: boolean;
   sha256?: string;
+  // The release that ran this sync.
+  version?: string;
   ms: number;
 }
 
@@ -59,6 +62,7 @@ export async function recordSync(store: Config["store"], fields: SyncLogFields):
     held_removals: fields.heldRemovals,
     published: fields.published,
     sha256: fields.sha256,
+    version,
     ms: fields.ms,
   };
   await writeText(store, LAST_SYNC_KEY, JSON.stringify(record)).catch(() => {});
@@ -82,6 +86,7 @@ function parse(text: string | null): unknown {
 // of the expected types are passed on, whatever the stored JSON holds.
 const SHA12 = /^[0-9a-f]{12}$/;
 const CODE = /^[a-z_]{1,40}$/;
+const RELEASE = /^\d{1,6}\.\d{1,6}\.\d{1,6}$/;
 
 function str(value: unknown, pattern?: RegExp): string | undefined {
   return typeof value === "string" && value.length <= 40 && (!pattern || pattern.test(value)) ? value : undefined;
@@ -127,6 +132,7 @@ function pickSync(value: unknown): LastSync | null {
     held_removals: count(v.held_removals),
     published: typeof v.published === "boolean" ? v.published : undefined,
     sha256: str(v.sha256, SHA12),
+    version: str(v.version, RELEASE),
     ms,
   };
 }
