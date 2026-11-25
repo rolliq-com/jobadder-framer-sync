@@ -62,6 +62,8 @@ export interface SyncStatus {
   items: Record<string, string>;
   // Items were written but the site was not deployed: the next run publishes.
   unpublished?: boolean;
+  // The release that wrote this record. The cron re-syncs once when it is not the running one.
+  version?: string;
 }
 
 /** A small JSON record under `key`, as text, or null if there is none. Throws if the store fails. */

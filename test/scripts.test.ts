@@ -209,6 +209,12 @@ describe("setup's reading of GET /status", () => {
     expect(text).toContain("ok by push at 2026-11-06T00:00:05.000Z: 6 jobs, 6 written, 0 removed, published, 4321 ms");
   });
 
+  it("names the release that did the last sync when the Worker reports it", () => {
+    const sync = { outcome: "ok", trigger: "cron", at: "2026-11-06T00:30:00.000Z", jobs: 6, upserted: 1, removed: 0, published: true, ms: 900, version: "1.0.2" };
+    const { lines } = formatStatus(200, live({ version: "1.0.2", last_sync: sync }), "1.0.2");
+    expect(lines.join("\n")).toContain("ok by cron (v1.0.2) at 2026-11-06T00:30:00.000Z: 6 jobs, 1 written, 0 removed, published, 900 ms");
+  });
+
   it("fails on an invalid setting and names it", () => {
     const { verdict, lines } = formatStatus(200, live({ config: { invalid: "FRAMER_PROJECT_ID" } }), "0.1.4");
     expect(verdict).toBe("fail");

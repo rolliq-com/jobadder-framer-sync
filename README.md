@@ -198,7 +198,8 @@ call about 0.3 s), well inside the 30 seconds the Worker has after answering a p
 - Status: `status.json` next to `latest.xml` holds the last run's payload hash, outcome, reason
   code and per-item hashes. No job text.
 - Cron, every 30 minutes: re-runs the sync on the stored payload when the last run on it ended in
-  `error` or `held`, or when it was never synced. An outage heals, and a hold keeps being reported
+  `error` or `held`, when it was never synced, or once when an earlier release did the last sync
+  (so a release that changes how ads are written goes live without a push). An outage heals, and a hold keeps being reported
   until a new push or the override.
 - One allow-listed log line per run (`event: "jobs_sync"`): outcome, trigger, reason code, counts,
   whether it published, a 12-character payload hash, duration. Never job text, the key or an error

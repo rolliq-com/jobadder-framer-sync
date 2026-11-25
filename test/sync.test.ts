@@ -7,6 +7,7 @@ import { LAST_PUSH_KEY, LAST_SYNC_KEY, readHealth } from "../src/health";
 import { handleRequest, handleScheduled } from "../src/index";
 import { CAPTURE_KEY, readStatus, STATUS_KEY, writeStatus } from "../src/store";
 import { reconcile, runSync, sha256Hex } from "../src/sync";
+import { version } from "../package.json";
 import { FakeFramer, type FakeStep } from "./fake-framer";
 import {
   ALL_JIDS,
@@ -486,10 +487,10 @@ describe("cron reconcile", () => {
     expect(syncLogs()).toMatchObject([{ outcome: "ok", trigger: "cron" }]);
   });
 
-  it.each(["ok", "refused"] as const)("skips a payload whose last run ended %s", async (outcome) => {
+  it.each(["ok", "refused"] as const)("skips a payload whose last run on this release ended %s", async (outcome) => {
     const framer = new FakeFramer();
     const sha256 = await capture(JOBS_XML);
-    await writeStatus(kv, { sha256, outcome, at: "2026-10-27T00:00:00Z", jobs: 6, items: {} });
+    await writeStatus(kv, { sha256, outcome, at: "2026-10-27T00:00:00Z", jobs: 6, items: {}, version });
     expect(await reconcile(syncConfig(), framer.connect)).toMatchObject({ outcome: "skipped", reason: "up_to_date" });
     expect(framer.calls).toEqual([]);
   });
@@ -499,6 +500,52 @@ describe("cron reconcile", () => {
     const sha256 = await capture(JOBS_XML);
     await writeStatus(kv, { sha256, outcome, at: "2026-10-27T00:00:00Z", jobs: 6, items: {} });
     expect(await reconcile(syncConfig(), framer.connect)).toMatchObject({ outcome: "ok", trigger: "cron" });
+  });
+
+  describe("after a new release", () => {
+    // As if an earlier release had synced this payload: same feed, older (or no) version.
+    async function syncedByEarlierRelease(framer: FakeFramer, earlier: string | undefined) {
+      const sha256 = await capture(JOBS_XML);
+      expect(await reconcile(syncConfig(), framer.connect)).toMatchObject({ outcome: "ok", upserted: 6 });
+      const status = (await readStatus(kv))!;
+      expect(status.version).toBe(version);
+      await writeStatus(kv, { ...status, version: earlier });
+      framer.calls = [];
+      return { sha256, status };
+    }
+
+    it.each(["0.0.0", undefined])("re-syncs the same feed once when release %s did the last sync, then skips", async (earlier) => {
+      const framer = new FakeFramer();
+      await syncedByEarlierRelease(framer, earlier);
+
+      // Nothing an ad shows changed here, so nothing is written or published.
+      expect(await reconcile(syncConfig(), framer.connect)).toMatchObject({ outcome: "ok", trigger: "cron", upserted: 0, published: false });
+      expect((await readStatus(kv))?.version).toBe(version);
+
+      framer.calls = [];
+      expect(await reconcile(syncConfig(), framer.connect)).toMatchObject({ outcome: "skipped", reason: "up_to_date" });
+      expect(framer.calls).toEqual([]);
+    });
+
+    it("writes and publishes only the ads whose written form changed", async () => {
+      const framer = new FakeFramer();
+      const { status } = await syncedByEarlierRelease(framer, "0.0.0");
+      // The earlier release wrote 2000003 differently: its stored hash no longer matches.
+      await writeStatus(kv, { ...status, version: "0.0.0", items: { ...status.items, "2000003": "0".repeat(32) } });
+
+      expect(await reconcile(syncConfig(), framer.connect)).toMatchObject({ outcome: "ok", upserted: 1, removed: 0, published: true });
+      expect(await reconcile(syncConfig(), framer.connect)).toMatchObject({ outcome: "skipped", reason: "up_to_date" });
+    });
+
+    it("still holds mass removals", async () => {
+      const framer = new FakeFramer();
+      await run(framer, JOBS_XML);
+      const sha256 = await capture(jobsXmlWith(["2000001"]));
+      await writeStatus(kv, { ...(await readStatus(kv))!, sha256, outcome: "ok", version: "0.0.0" });
+
+      expect(await reconcile(syncConfig(), framer.connect)).toMatchObject({ outcome: "held", reason: "mass_removal_held", heldRemovals: 5 });
+      expect(framer.live.size).toBe(6);
+    });
   });
 
   it("re-runs when a newer payload arrived than the last synced one", async () => {
@@ -572,7 +619,7 @@ describe("the record GET /status reads", () => {
     const pushed = (await health()).last_push;
     expect(pushed).not.toBeNull();
     await reconcile(syncConfig(), framer.connect);
-    expect(await health()).toMatchObject({ last_push: pushed!, last_sync: { outcome: "ok", trigger: "cron" } });
+    expect(await health()).toMatchObject({ last_push: pushed!, last_sync: { outcome: "ok", trigger: "cron", version } });
 
     await bindings.FEED_CAPTURE.delete(LAST_SYNC_KEY);
     expect(await reconcile(syncConfig(), framer.connect)).toMatchObject({ outcome: "skipped", reason: "up_to_date" });
